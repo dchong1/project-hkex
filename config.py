@@ -13,8 +13,9 @@ from typing import List
 
 WATCHLIST: List[str] = ["09888"]
 
-# How many days back from "today" (Asia/Hong_Kong) for the date range
-DAYS_BACK: int = 10
+# HKEX search "from" date and post-filter: only keep rows whose release_time is within
+# the last N days from now (Asia/Hong_Kong).
+DAYS_BACK: int = 7
 
 # HKEX "Headline Category" labels (tier2). One search is run per label, then merged.
 TARGET_CATEGORIES: List[str] = ["Announcements and Notices", "All"]

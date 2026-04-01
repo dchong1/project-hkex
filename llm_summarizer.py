@@ -25,7 +25,7 @@ import config as app_config
 logger = logging.getLogger(__name__)
 
 DEFAULT_GROK_MODEL = "grok-3-mini"
-MAX_WORDS = 40
+MAX_WORDS = 70
 MAX_PDF_BYTES = 25 * 1024 * 1024
 FIRST_PAGES = 3
 MAX_EXCERPT_CHARS = 8000
@@ -100,7 +100,7 @@ class GrokSummarizer:
         body = {
             "model": self.model,
             "temperature": 0.2,
-            "max_tokens": 120,
+            "max_tokens": 220,
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
@@ -134,6 +134,8 @@ class GrokSummarizer:
         system = (
             "You summarize Hong Kong stock exchange (HKEX) regulatory filings for a busy reader. "
             "Be factual and neutral. No markdown or bullet points. English only. "
+            "Prioritize concrete details when the text supports them: type of corporate action, "
+            "key amounts and currency, important dates or deadlines, and main parties or instruments. "
             f"At most {MAX_WORDS} words."
         )
 

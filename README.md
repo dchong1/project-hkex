@@ -1,6 +1,6 @@
 # HKEX announcements → Notion (Playwright + Grok)
 
-Small personal tool: scrape **HKEX Listed Company Information Title Search** for a watchlist, skip items already stored (by PDF **Unique ID**), add new rows to a **Notion** database with a short **Grok** summary. The **Document URL** property links to the full PDF on HKEX; the **Summary** is a teaser only (≤40 words).
+Small personal tool: scrape **HKEX Listed Company Information Title Search** for a watchlist, skip items already stored (by PDF **Unique ID**), add new rows to a **Notion** database with a **Grok** summary. The **Document URL** property links to the full PDF on HKEX; the **Summary** is factual and detail-oriented (at most **70** words).
 
 ## Prerequisites
 
@@ -16,12 +16,12 @@ Create a database with these properties (names and types must match unless you c
 |----------------|-------------|--------|
 | Title          | Title       | Announcement title |
 | Release Date   | Date        | Include time if available |
-| Stock Code     | **Text**    | Plain text preserves leading zeros (e.g. `00700`) |
+| Stock Code     | **Text**    | Plain text; leading zeros preserved. If HKEX returns several codes in one cell, **only the first** is stored. |
 | Company Name   | Text        | |
 | Document URL   | URL         | **Open this for the full PDF** |
 | Unique ID      | Text        | Dedupe key (PDF filename stem) |
 | Category       | Multi-select| Tags from HKEX document column |
-| Summary        | Text        | Short LLM summary |
+| Summary        | Text        | LLM summary (≤70 words; key facts where available) |
 | Status         | Select      | Add option `New` |
 
 Link the integration to the database. The database ID is the 32-character hex in the database URL (with hyphens removed).
@@ -31,11 +31,26 @@ Link the integration to the database. The database ID is the 32-character hex in
 1. Copy `.env.example` to `.env` and set `NOTION_TOKEN`, `NOTION_DATABASE_ID`, and `GROK_API_KEY`.
 2. Edit **`config.py`**:
    - `WATCHLIST`: stock codes as strings, e.g. `["09888", "00700", "09988"]` — the fetcher runs **one HKEX search per code** (autocomplete cannot reliably bind multiple tickers in one field).
-   - `DAYS_BACK`: how far back to search (default `10`)
+   - `DAYS_BACK`: how far back the HKEX **from** date is set, and the rolling window for **keeping** rows by parsed **release time** (Asia/Hong_Kong)
    - `TARGET_CATEGORIES`: HKEX headline tier2 labels, e.g. `["Announcements and Notices", "All"]` or `["Circulars"]`  
      A pair `["Some headline group", "All"]` is merged into **one** search (second step + hidden `tierTwoId`, matching the site). Otherwise each entry is its own run; results merge by PDF id.
 
 ## Local setup
+
+Use a **virtual environment** in the project folder so dependencies (including Playwright) install reliably. macOS/Homebrew Python often blocks `pip install` globally (PEP 668); the venv avoids that.
+
+**macOS / Linux (bash or zsh):**
+
+```bash
+cd /path/to/project-hkex
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python -m playwright install chromium
+python main.py
+```
+
+**Windows (PowerShell):**
 
 ```powershell
 python -m venv .venv
@@ -44,6 +59,26 @@ pip install -r requirements.txt
 playwright install chromium
 python main.py
 ```
+
+After setup, either **activate** the venv as above or run `\.venv/bin/python main.py` (macOS/Linux) so you do not use a system/conda Python missing this project’s packages.
+
+### Interactive run (local terminal)
+
+When **stdin is a TTY** (normal terminal), `main.py` **prompts** for:
+
+1. **Stock codes** — comma-separated; **Enter** keeps `WATCHLIST` from `config.py`.
+2. **Days back (N)** — **Enter** keeps `DAYS_BACK`. Sets the HKEX “from” date **and** drops any row whose parsed release time is **older than N days** in Asia/Hong_Kong (so old rows on a capped results page are excluded).
+3. **Target categories** — **`1`** or **Enter** for `TARGET_CATEGORIES` from `config.py`; **`2`** Circulars; **`3`** Listing Documents; **`4`** Custom (tier-2 labels one per line). Edit `_CATEGORY_MENU` in `main.py` to change presets.
+
+Skip prompts and use **`config.py` only**:
+
+```powershell
+python main.py --use-config
+```
+
+Or set **`HKEX_USE_CONFIG=1`** in the environment.
+
+**CI / automation:** non-interactive runs (e.g. GitHub Actions) have **no TTY**, so `main.py` always uses `config.py` and does not block on input.
 
 Dates use the **Asia/Hong_Kong** timezone when computing the “from / to” range.
 

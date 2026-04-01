@@ -88,6 +88,17 @@ def parse_category_tags(category_text: str) -> list[str]:
     return out
 
 
+def _primary_stock_code(stock: str) -> str:
+    """If HKEX puts multiple codes in one cell, Notion gets the first token only."""
+    s = (stock or "").strip()
+    if not s:
+        return ""
+    for sep in (",", "，", ";"):
+        if sep in s:
+            return s.split(sep, 1)[0].strip()
+    return s
+
+
 def _rich_text(content: str) -> dict[str, Any]:
     return {
         "rich_text": [
@@ -158,7 +169,7 @@ def create_announcement_page(
     props: dict[str, Any] = {
         PROP_TITLE: _title_prop(item.get("document_title", "Untitled")),
         PROP_RELEASE_DATE: _date_prop(item.get("release_time")),
-        PROP_STOCK_CODE: _rich_text(item.get("stock_code", "")),
+        PROP_STOCK_CODE: _rich_text(_primary_stock_code(item.get("stock_code", ""))),
         PROP_COMPANY_NAME: _rich_text(item.get("company_short_name", "")),
         PROP_DOCUMENT_URL: {"url": item.get("pdf_url") or None},
         PROP_UNIQUE_ID: _rich_text(item.get("unique_id", "")),

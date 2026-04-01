@@ -401,12 +401,68 @@ def _parse_release_time(text: str) -> str | None:
     return text
 
 
+def _item_release_datetime_hk(item: dict[str, Any]) -> datetime | None:
+    """Parse item releaseTime ISO-ish string to timezone-aware datetime in Asia/Hong_Kong."""
+    rt = item.get("release_time")
+    if not rt or not isinstance(rt, str):
+        return None
+    s = rt.strip()
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=TZ_HK)
+    else:
+        dt = dt.astimezone(TZ_HK)
+    return dt
+
+
+def _filter_by_release_window(
+    items: list[dict[str, Any]], days_back: int
+) -> list[dict[str, Any]]:
+    """Keep rows whose release_time is >= now (HK) minus days_back (inclusive rolling window)."""
+    if days_back < 0:
+        days_back = 0
+    cutoff = datetime.now(TZ_HK) - timedelta(days=days_back)
+    kept: list[dict[str, Any]] = []
+    skipped_unparsed = 0
+    skipped_old = 0
+    for it in items:
+        dt = _item_release_datetime_hk(it)
+        if dt is None:
+            skipped_unparsed += 1
+            continue
+        if dt < cutoff:
+            skipped_old += 1
+            continue
+        kept.append(it)
+    if skipped_unparsed or skipped_old:
+        logger.info(
+            "Release-time filter (%s day(s) back): keeping %s row(s); "
+            "%s unparsed time; %s before cutoff",
+            days_back,
+            len(kept),
+            skipped_unparsed,
+            skipped_old,
+        )
+    return kept
+
+
 def _basename_no_pdf(url: str) -> str | None:
     path = urlparse(url).path
     base = path.rsplit("/", 1)[-1]
     if base.lower().endswith(".pdf"):
         return base[: -4]
     return None
+
+
+def _strip_hkex_cell_prefix(text: str, label_pattern: str) -> str:
+    """Remove HKEX table prefixes like 'Stock Code: ' from cell text (case-insensitive)."""
+    t = " ".join((text or "").split())
+    return re.sub(label_pattern, "", t, count=1, flags=re.IGNORECASE).strip()
 
 
 def _parse_rows(html: str) -> list[dict[str, Any]]:
@@ -441,8 +497,12 @@ def _parse_rows(html: str) -> list[dict[str, Any]]:
                 continue
 
             raw_time = td_time.get_text(" ", strip=True)
-            stock_code = td_code.get_text(" ", strip=True)
-            company_short_name = td_name.get_text(" ", strip=True)
+            stock_code = _strip_hkex_cell_prefix(
+                td_code.get_text(" ", strip=True), r"^Stock Code:\s*"
+            )
+            company_short_name = _strip_hkex_cell_prefix(
+                td_name.get_text(" ", strip=True), r"^Stock Short name:\s*"
+            )
 
             # Document column: headline + title — keep full text for Category parsing in Notion.
             category_text = td_doc.get_text(" ", strip=True)
@@ -495,6 +555,9 @@ def fetch_announcements(
 ) -> list[dict[str, Any]]:
     """
     Return announcement dicts for all configured categories, merged by unique_id (last wins).
+
+    After scraping, rows are dropped unless release_time parses and falls within the last
+    ``days_back`` days from now (Asia/Hong_Kong), matching the HKEX form date range intent.
     """
     wl = watchlist if watchlist is not None else app_config.WATCHLIST
     db = days_back if days_back is not None else app_config.DAYS_BACK
@@ -536,4 +599,5 @@ def fetch_announcements(
         finally:
             browser.close()
 
-    return list(merged.values())
+    out = list(merged.values())
+    return _filter_by_release_window(out, db)
