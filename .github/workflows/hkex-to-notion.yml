@@ -1,0 +1,46 @@
+# HKEX → Notion sync
+#
+# Schedule is configured HERE (GitHub requires a literal cron expression).
+# Default: once daily at 02:00 UTC.
+#
+# Examples (replace the `cron:` line under `schedule:`):
+#   Twice daily:     '0 2,14 * * *'    # 02:00 and 14:00 UTC
+#   Every 6 hours:   '0 */6 * * *'
+#   Every hour:      '0 * * * *'
+#   Weekdays 09:00 HK (~01:00 UTC winter): adjust for DST as needed
+
+name: HKEX to Notion
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: hkex-notion
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Playwright browser
+        run: playwright install --with-deps chromium
+
+      - name: Run sync
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
+          GROK_MODEL: ${{ vars.GROK_MODEL }}
+        run: python main.py
