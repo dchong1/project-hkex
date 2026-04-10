@@ -11,7 +11,7 @@ from typing import List
 
 # --- Watchlist & search (edit for your portfolio) ---
 
-WATCHLIST: List[str] = ["09888"]
+WATCHLIST: List[str] = ["00035", "00488", "03750", "09888", "01548", "00001", "00017"]
 
 # HKEX search "from" date and post-filter: only keep rows whose release_time is within
 # the last N days from now (Asia/Hong_Kong).
