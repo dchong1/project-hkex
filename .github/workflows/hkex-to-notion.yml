@@ -41,6 +41,12 @@ jobs:
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          # Default summarizer is none (no LLM cost). Set repo variable SUMMARIZER=grok
+          # and secret GROK_API_KEY to keep Grok summaries; or SUMMARIZER=openai + LLM_* vars.
+          SUMMARIZER: ${{ vars.SUMMARIZER }}
           GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
           GROK_MODEL: ${{ vars.GROK_MODEL }}
+          LLM_BASE_URL: ${{ vars.LLM_BASE_URL }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
         run: python main.py
