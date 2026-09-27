@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Orchestration: HKEX fetch → Notion dedupe → Grok summary → Notion create.
+Orchestration: HKEX fetch → Notion dedupe → summary → Notion create.
 Interactive prompts when stdin is a TTY (unless --use-config or HKEX_USE_CONFIG=1).
 """
 
@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 
 import config as app_config
 from hkex_fetcher import HEADLINE_GROUP_DATA_VALUE, fetch_announcements
-from llm_summarizer import GrokSummarizer
+from llm_summarizer import create_summarizer, summarizer_mode_label
 from notion_client import check_if_exists, create_announcement_page
 
 logging.basicConfig(
@@ -129,7 +129,7 @@ def _resolve_run_settings(args: argparse.Namespace) -> tuple[list[str], int, lis
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="HKEX title search → Notion, with optional Grok summaries.",
+        description="HKEX title search → Notion, with pluggable summaries (none / Grok / OpenAI-compatible).",
     )
     p.add_argument(
         "--use-config",
@@ -145,10 +145,10 @@ def main() -> int:
 
     token = app_config.require_env("NOTION_TOKEN")
     database_id = app_config.require_env("NOTION_DATABASE_ID")
-    # Warm-check Grok key early
-    app_config.grok_api_key()
 
-    summarizer = GrokSummarizer()
+    mode = summarizer_mode_label()
+    logger.info("Summarizer mode: %s", mode)
+    summarizer = create_summarizer()
 
     watchlist, days_back, target_categories = _resolve_run_settings(args)
 

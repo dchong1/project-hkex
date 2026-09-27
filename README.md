@@ -1,12 +1,12 @@
-# HKEX announcements → Notion (Playwright + Grok)
+# HKEX announcements → Notion (Playwright + optional LLM)
 
-Small personal tool: scrape **HKEX Listed Company Information Title Search** for a watchlist, skip items already stored (by PDF **Unique ID**), add new rows to a **Notion** database with a **Grok** summary. The **Document URL** property links to the full PDF on HKEX; the **Summary** is factual and detail-oriented (at most **70** words).
+Small personal tool: scrape **HKEX Listed Company Information Title Search** for a watchlist, skip items already stored (by PDF **Unique ID**), add new rows to a **Notion** database with an optional **summary** (at most **70** words). The **Document URL** property links to the full PDF on HKEX.
 
 ## Prerequisites
 
 - Python **3.11+**
 - [Notion integration](https://developers.notion.com/docs/create-a-notion-integration) with access to your database
-- [xAI API key](https://docs.x.ai/docs) for Grok
+- **Optional:** an LLM provider (Grok/xAI, or any OpenAI-compatible endpoint such as Ollama). Default is **no LLM** (`SUMMARIZER=none`) so clones and CI need no paid API key.
 
 ## Notion database schema
 
@@ -28,8 +28,9 @@ Link the integration to the database. The database ID is the 32-character hex in
 
 ## Configuration
 
-1. Copy `.env.example` to `.env` and set `NOTION_TOKEN`, `NOTION_DATABASE_ID`, and `GROK_API_KEY`.
-2. Edit **`config.py`**:
+1. Copy `.env.example` to `.env` and set `NOTION_TOKEN` and `NOTION_DATABASE_ID`.
+2. Choose a **summarizer** (see [Summarizer modes](#summarizer-modes)); omit LLM vars for zero-cost runs.
+3. Edit **`config.py`**:
    - `WATCHLIST`: stock codes as strings, e.g. `["09888", "00700", "09988"]` — the fetcher runs **one HKEX search per code** (autocomplete cannot reliably bind multiple tickers in one field).
    - `DAYS_BACK`: how far back the HKEX **from** date is set, and the rolling window for **keeping** rows by parsed **release time** (Asia/Hong_Kong)
    - `TARGET_CATEGORIES`: HKEX headline tier2 labels, e.g. `["Announcements and Notices", "All"]` or `["Circulars"]`  
@@ -82,6 +83,40 @@ Or set **`HKEX_USE_CONFIG=1`** in the environment.
 
 Dates use the **Asia/Hong_Kong** timezone when computing the “from / to” range.
 
+## Summarizer modes
+
+Set **`SUMMARIZER`** or **`LLM_PROVIDER`** (alias). Resolution order:
+
+1. If `SUMMARIZER` / `LLM_PROVIDER` is set → use that mode.
+2. Else if `GROK_API_KEY` is set → **`grok`** (keeps existing deployments working).
+3. Else → **`none`** (default; no LLM HTTP calls).
+
+| Mode | Env | Notes |
+|------|-----|--------|
+| **`none`** | (default) or `SUMMARIZER=none` | Deterministic blurb from title + category; no PDF download for summarization. **No Grok key required.** |
+| **`grok`** | `GROK_API_KEY`, optional `GROK_MODEL` (default `grok-3-mini`) | Downloads PDF excerpt, calls [xAI Chat Completions](https://docs.x.ai/docs). |
+| **`openai`** | `LLM_BASE_URL`, `LLM_MODEL`, optional `LLM_API_KEY` | OpenAI-compatible Chat Completions, e.g. Ollama `http://127.0.0.1:11434/v1`. Also accepts `SUMMARIZER=openai-compatible`. |
+
+**Zero-cost local run** (Notion only):
+
+```bash
+SUMMARIZER=none python main.py --use-config
+```
+
+**Grok:**
+
+```bash
+SUMMARIZER=grok GROK_API_KEY=xai-... python main.py --use-config
+```
+
+**Ollama (example):**
+
+```bash
+SUMMARIZER=openai LLM_BASE_URL=http://127.0.0.1:11434/v1 LLM_MODEL=llama3.2 python main.py --use-config
+```
+
+If a paid/remote mode is selected but required credentials or URL are missing, the run fails at startup with a clear error. `none` never requires `GROK_API_KEY`.
+
 ## GitHub Actions
 
 Workflow: [`.github/workflows/hkex-to-notion.yml`](.github/workflows/hkex-to-notion.yml)
@@ -90,21 +125,26 @@ Workflow: [`.github/workflows/hkex-to-notion.yml`](.github/workflows/hkex-to-not
 - **Change frequency**: edit the `cron:` line in the workflow file. GitHub Actions **requires a literal cron string** in YAML (not a secret). The file includes commented examples (e.g. twice daily, hourly).
 - **Manual run**: Actions → workflow → “Run workflow”.
 
-### Repository secrets
+### Repository secrets and variables
 
-| Secret | Description |
-|--------|-------------|
-| `NOTION_TOKEN` | Notion internal integration token |
-| `NOTION_DATABASE_ID` | Target database ID |
-| `GROK_API_KEY` | xAI API key |
+| Name | Kind | Description |
+|------|------|-------------|
+| `NOTION_TOKEN` | secret | Notion internal integration token |
+| `NOTION_DATABASE_ID` | secret | Target database ID |
+| `GROK_API_KEY` | secret | xAI API key (only if using Grok) |
+| `LLM_API_KEY` | secret | Optional API key for OpenAI-compatible backends |
+| `SUMMARIZER` | variable | `none` (default if unset and no Grok key), `grok`, or `openai` |
+| `GROK_MODEL` | variable | Grok model (default `grok-3-mini`) |
+| `LLM_BASE_URL` | variable | e.g. `http://host:11434/v1` for Ollama |
+| `LLM_MODEL` | variable | Model name for OpenAI-compatible mode |
 
-Optional: set repository variable **`GROK_MODEL`** (the workflow passes it through) or define it in your shell / `.env` locally. If unset, the default in `llm_summarizer.py` is used.
+**Migration:** Existing workflows that only set `GROK_API_KEY` continue to use Grok automatically. To run scheduled sync at **zero LLM cost**, remove `GROK_API_KEY` or set repository variable **`SUMMARIZER=none`**.
 
 ## Behaviour notes
 
 - **HKEX** may change its HTML/JS; if the fetcher breaks, use `DEBUG_SAVE_HTML=1` locally to dump HTML on failure (see `hkex_fetcher.py`).
 - **Rate limits**: small delays between Notion writes and LLM calls.
-- **PDF text**: If extraction fails, the summarizer falls back to title + category only.
+- **PDF text**: In LLM modes, if extraction fails, the summarizer falls back to title + category only. In `none` mode, PDFs are not downloaded for summarization.
 
 ## Responsible use
 
