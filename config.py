@@ -7,11 +7,74 @@ Secrets load from environment (and .env via main.py / dotenv).
 from __future__ import annotations
 
 import os
-from typing import List
+from pathlib import Path
+from typing import Any, List
 
-# --- Watchlist & search (edit for your portfolio) ---
+import yaml
 
-WATCHLIST: List[str] = ["00035", "00488", "03750", "09888", "01548", "00001", "00017", "00388", "00003", "00003", "01038", "00003", "01211", "00981", "00700", "09988"]
+# --- Watchlist & search ---
+
+_WATCHLIST_YAML = Path(__file__).resolve().parent / "watchlist.yaml"
+
+
+def _normalize_stock_code(raw: Any) -> str:
+    if raw is None:
+        return ""
+    s = str(raw).strip()
+    if s.isdigit() and len(s) < 5:
+        return s.zfill(5)
+    return s
+
+
+def _load_watchlist_from_yaml(path: Path) -> List[str]:
+    """Load deduplicated stock codes from repo-root watchlist.yaml."""
+    if not path.is_file():
+        raise RuntimeError(
+            f"Watchlist file not found: {path}. "
+            "Add watchlist.yaml at the repo root or restore it from git."
+        )
+    with path.open(encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    if data is None:
+        raise RuntimeError(f"Watchlist file is empty: {path}")
+
+    codes: List[str] = []
+    if isinstance(data, list):
+        for entry in data:
+            if isinstance(entry, dict):
+                codes.append(_normalize_stock_code(entry.get("code")))
+            else:
+                codes.append(_normalize_stock_code(entry))
+    elif isinstance(data, dict):
+        stocks = data.get("stocks")
+        if stocks is None:
+            stocks = data.get("watchlist")
+        if stocks is None:
+            raise RuntimeError(
+                f"Watchlist file {path} must contain a 'stocks' or 'watchlist' list."
+            )
+        if not isinstance(stocks, list):
+            raise RuntimeError(
+                f"Watchlist 'stocks' in {path} must be a list, got {type(stocks).__name__}."
+            )
+        for entry in stocks:
+            if isinstance(entry, dict):
+                codes.append(_normalize_stock_code(entry.get("code")))
+            else:
+                codes.append(_normalize_stock_code(entry))
+    else:
+        raise RuntimeError(
+            f"Watchlist file {path} must be a YAML list or mapping with 'stocks'."
+        )
+
+    deduped = list(dict.fromkeys(c for c in codes if c))
+    if not deduped:
+        raise RuntimeError(f"Watchlist file {path} contains no stock codes.")
+    return deduped
+
+
+# Edit watchlist.yaml (not this file) to change tracked codes; commit to apply.
+WATCHLIST: List[str] = _load_watchlist_from_yaml(_WATCHLIST_YAML)
 
 # HKEX search "from" date and post-filter: only keep rows whose release_time is within
 # the last N days from now (Asia/Hong_Kong).

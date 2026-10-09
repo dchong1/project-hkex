@@ -30,8 +30,8 @@ Link the integration to the database. The database ID is the 32-character hex in
 
 1. Copy `.env.example` to `.env` and set `NOTION_TOKEN` and `NOTION_DATABASE_ID`.
 2. Choose a **summarizer** (see [Summarizer modes](#summarizer-modes)); omit LLM vars for zero-cost runs.
-3. Edit **`config.py`**:
-   - `WATCHLIST`: stock codes as strings, e.g. `["09888", "00700", "09988"]` — the fetcher runs **one HKEX search per code** (autocomplete cannot reliably bind multiple tickers in one field).
+3. Edit **`watchlist.yaml`** for stock codes (commit to change what is tracked). Optional `name` fields are for humans only; the fetcher runs **one HKEX search per `code`** (autocomplete cannot reliably bind multiple tickers in one field).
+4. Edit **`config.py`** for other defaults:
    - `DAYS_BACK`: how far back the HKEX **from** date is set, and the rolling window for **keeping** rows by parsed **release time** (Asia/Hong_Kong)
    - `TARGET_CATEGORIES`: HKEX headline tier2 labels, e.g. `["Announcements and Notices", "All"]` or `["Circulars"]`  
      A pair `["Some headline group", "All"]` is merged into **one** search (second step + hidden `tierTwoId`, matching the site). Otherwise each entry is its own run; results merge by PDF id.
@@ -67,7 +67,7 @@ After setup, either **activate** the venv as above or run `\.venv/bin/python mai
 
 When **stdin is a TTY** (normal terminal), `main.py` **prompts** for:
 
-1. **Stock codes** — comma-separated; **Enter** keeps `WATCHLIST` from `config.py`.
+1. **Stock codes** — comma-separated; **Enter** keeps `WATCHLIST` from `watchlist.yaml` (via `config.py`).
 2. **Days back (N)** — **Enter** keeps `DAYS_BACK`. Sets the HKEX “from” date **and** drops any row whose parsed release time is **older than N days** in Asia/Hong_Kong (so old rows on a capped results page are excluded).
 3. **Target categories** — **`1`** or **Enter** for `TARGET_CATEGORIES` from `config.py`; **`2`** Circulars; **`3`** Listing Documents; **`4`** Custom (tier-2 labels one per line). Edit `_CATEGORY_MENU` in `main.py` to change presets.
 
