@@ -1,0 +1,31 @@
+# HKEX stock codes to track (one search per code). Edit this file and commit to change
+# what the fetcher monitors; config.py loads codes from here at import time.
+stocks:
+  - code: "00001"
+    name: CK Hutchison Holdings
+  - code: "00003"
+    name: Hong Kong & China Gas
+  - code: "00017"
+    name: New World Development
+  - code: "00035"
+    name: Far East Consortium International
+  - code: "00388"
+    name: HKEX
+  - code: "00488"
+    name: Lai Sun Development
+  - code: "00700"
+    name: Tencent Holdings
+  - code: "00981"
+    name: SMIC
+  - code: "01038"
+    name: CK Infrastructure Holdings
+  - code: "01211"
+    name: BYD
+  - code: "01548"
+    name: Genscript Biotech
+  - code: "03750"
+    name: Contemporary Amperex Technology (H share)
+  - code: "09888"
+    name: Baidu
+  - code: "09988"
+    name: Alibaba Group
