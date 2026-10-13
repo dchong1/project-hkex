@@ -5,6 +5,7 @@ Category handling:
   category_text often looks like: "Announcements and Notices - [Inside Information]"
   We split only on the first " - " so subtypes with hyphens stay intact.
   Brackets around subtypes are stripped for cleaner multi_select tags.
+  Option names are sanitized before create (Notion forbids commas in select tags).
 """
 
 from __future__ import annotations
@@ -35,6 +36,25 @@ STATUS_NEW = "New"
 
 # Notion multi_select option names are capped in practice; keep tags short.
 _MAX_TAG_LEN = 100
+
+
+def sanitize_notion_option_name(name: str, *, max_len: int = _MAX_TAG_LEN) -> str:
+    """
+    Normalize a value for Notion select / multi_select option ``name``.
+
+    The API returns validation_error (400) when option names contain commas.
+    Titles and rich_text are not subject to this rule and should stay unsanitized.
+    """
+    s = " ".join((name or "").split())
+    if not s:
+        return ""
+    # Notion: "Invalid multi_select option, commas not allowed"
+    s = re.sub(r",\s*", " / ", s)
+    s = re.sub(r"(?:\s*/\s*)+", " / ", s)
+    s = s.strip()
+    if len(s) > max_len:
+        s = s[:max_len].rstrip()
+    return s
 
 
 class AnnouncementItem(TypedDict, total=False):
@@ -163,7 +183,8 @@ def create_announcement_page(
 ) -> str:
     """Create a page; return new page id."""
     url = "https://api.notion.com/v1/pages"
-    tags = parse_category_tags(item.get("category_text", ""))
+    raw_tags = parse_category_tags(item.get("category_text", ""))
+    tags = [t for t in (sanitize_notion_option_name(t) for t in raw_tags) if t]
     multi = [{"name": t} for t in tags]
 
     props: dict[str, Any] = {
@@ -175,7 +196,7 @@ def create_announcement_page(
         PROP_UNIQUE_ID: _rich_text(item.get("unique_id", "")),
         PROP_CATEGORY: {"multi_select": multi},
         PROP_SUMMARY: _rich_text(summary),
-        PROP_STATUS: {"select": {"name": STATUS_NEW}},
+        PROP_STATUS: {"select": {"name": sanitize_notion_option_name(STATUS_NEW)}},
     }
 
     body = {"parent": {"database_id": database_id}, "properties": props}
